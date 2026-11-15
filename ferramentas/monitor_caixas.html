@@ -1,0 +1,1150 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inspetor de caixas | monitor serial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #E6EAEE; --panel: #F8FAFB; --well: #EDF1F4; --ink: #1D2630; --muted: #586572; --line: #C8D0D8;
+  --edge: #1D2630; --bezel: #2C343E; --bezel-hi: #46525F;
+  --safety: #F2C230; --focus: #2F6FDB;
+  --c-fechada: #3C9D4A; --c-aberta: #D99A12; --c-amassada: #D2453A; --c-vazio: #7D8DA1; --c-incerto: #9479C8;
+  --pixel: "Silkscreen", "Courier New", monospace;
+  --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161C23; --panel: #1F262F; --well: #181E26; --ink: #E3E8ED; --muted: #95A2AF; --line: #323C47;
+    --edge: #000; --bezel: #2A323C; --bezel-hi: #3E4955; --focus: #7FB0FF; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161C23; --panel: #1F262F; --well: #181E26; --ink: #E3E8ED; --muted: #95A2AF; --line: #323C47;
+  --edge: #000; --bezel: #2A323C; --bezel-hi: #3E4955; --focus: #7FB0FF; color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: inherit; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body); }
+h1, h2 { font-family: var(--pixel); font-weight: 400; margin: 0; letter-spacing: 0.02em; }
+h1 { font-size: 24px; line-height: 1.1; }
+h2 { font-size: 16px; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* topo */
+.masthead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px;
+  max-width: 1280px; margin: 0 auto; padding: 18px 16px 6px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand canvas { width: 40px; height: 32px; image-rendering: pixelated; }
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.conn { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.status { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); padding-right: 6px; }
+.status i { width: 10px; height: 10px; background: var(--c-vazio); box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--line); }
+.status[data-s="on"] i { background: var(--c-fechada); }
+.status[data-s="demo"] i { background: var(--safety); }
+.field { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
+select { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
+
+.btn { border: 2px solid var(--edge); background: var(--panel); border-radius: 4px; padding: 6px 12px;
+  box-shadow: 2px 2px 0 var(--edge); cursor: pointer; line-height: 1.3; }
+.btn:active { transform: translate(2px, 2px); box-shadow: none; }
+.btn:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: 2px 2px 0 var(--edge); }
+.btn.primary { background: var(--safety); color: #1D2630; }
+.btn.small { padding: 3px 9px; font-size: 13px; box-shadow: 1px 1px 0 var(--edge); border-width: 1.5px; }
+.link { background: none; border: 0; padding: 2px 4px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: 14px; }
+.link:hover { color: var(--ink); }
+
+.banner { max-width: 1248px; margin: 10px auto 0; padding: 10px 14px; border-left: 4px solid var(--c-aberta);
+  background: var(--panel); border-radius: 0 4px 4px 0; font-size: 14px; display: flex; gap: 12px; align-items: start; justify-content: space-between; }
+.banner[hidden] { display: none; }
+
+/* grade principal */
+main { display: grid; gap: 16px; padding: 12px 16px 28px; max-width: 1280px; margin: 0 auto;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-areas: "stage readout" "camera history" "console console"; }
+.stage { grid-area: stage; } .readout { grid-area: readout; } .camera { grid-area: camera; }
+.history { grid-area: history; } .console { grid-area: console; }
+@media (max-width: 920px) {
+  main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "stage" "readout" "camera" "history" "console"; }
+}
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; min-width: 0; }
+.panel-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 12px; }
+.hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+
+/* tela CRT (o elemento de destaque) */
+.crt { background: linear-gradient(160deg, var(--bezel-hi), var(--bezel) 40%); border-radius: 18px; padding: 16px 16px 12px;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.08), inset 0 -3px 0 rgba(0,0,0,.35); }
+.screen { position: relative; border-radius: 10px; overflow: hidden; background: #0F151C;
+  box-shadow: inset 0 0 0 2px #0A0E13; transition: box-shadow .2s; }
+.screen canvas { display: block; width: 100%; aspect-ratio: 4 / 3; image-rendering: pixelated; }
+.screen::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,.16) 0 1px, transparent 1px 3px),
+              radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.45) 100%); }
+.screen.alert { animation: alert 0.32s steps(2) 4; }
+@keyframes alert { 0% { box-shadow: inset 0 0 0 5px var(--alert-c, var(--c-amassada)); } 100% { box-shadow: inset 0 0 0 2px #0A0E13; } }
+.hud { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 12px 14px; pointer-events: none;
+  font-family: var(--pixel); color: #E8F0F8; text-shadow: 2px 2px 0 #000; }
+.hud-top { display: flex; justify-content: space-between; font-size: 16px; }
+.hud-class { font-size: clamp(26px, 5vw, 44px); line-height: 1; color: var(--hud-c, #E8F0F8); }
+.hud-sub { font-size: 13px; color: #B7C4D2; margin-top: 6px; }
+.crt-foot { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px 0; color: #A9B5C2; font-size: 13px; }
+.crt-foot .led { display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: #4A5562; vertical-align: 1px; }
+.crt-foot .led.on { background: var(--c-fechada); box-shadow: 0 0 6px var(--c-fechada); }
+
+/* barras */
+.bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.bars li { display: grid; grid-template-columns: 40px 88px minmax(0, 1fr) 52px; align-items: center; gap: 10px; }
+.bars canvas { width: 40px; height: 32px; image-rendering: pixelated; }
+.bars .name { font-weight: 700; }
+.track { height: 18px; background: var(--well); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+.fill { height: 100%; width: 0; background: var(--c);
+  background-image: repeating-linear-gradient(90deg, transparent 0 6px, rgba(0,0,0,.12) 6px 8px);
+  transition: width .18s steps(6); }
+.bars .pct { font-family: var(--pixel); text-align: right; font-size: 15px; }
+.bars li.top .name::after { content: " ◂"; color: var(--c); }
+.tune { display: flex; flex-wrap: wrap; gap: 10px 20px; margin: 16px 0 4px; padding-top: 14px; border-top: 1px dashed var(--line); font-size: 14px; }
+.tune label { display: inline-flex; align-items: center; gap: 8px; }
+.tune input[type=range] { width: 120px; accent-color: var(--safety); }
+.tune output { font-family: var(--pixel); min-width: 3.2em; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 10px; margin: 14px 0 0; }
+.stats div { min-width: 0; }
+.stats dt { color: var(--muted); font-size: 13px; }
+.stats dd { margin: 0; font-family: var(--pixel); font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* chaves liga/desliga */
+.switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch .track-s { width: 40px; height: 22px; background: var(--well); border: 2px solid var(--edge); border-radius: 3px; position: relative; flex: none; }
+.switch .track-s::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: var(--muted); transition: transform .12s steps(3), background .12s; }
+.switch input:checked + .track-s { background: var(--safety); }
+.switch input:checked + .track-s::after { transform: translateX(18px); background: #1D2630; }
+.switch input:focus-visible + .track-s { outline: 3px solid var(--focus); outline-offset: 2px; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
+.check input { accent-color: var(--safety); width: 16px; height: 16px; }
+
+/* câmera */
+.cam-view { position: relative; background: #0F151C; border-radius: 4px; display: grid; place-items: center; min-height: 180px; overflow: hidden; }
+.cam-view canvas { display: block; width: 100%; max-height: 360px; object-fit: contain; image-rendering: pixelated; }
+.cam-view.smooth canvas { image-rendering: auto; }
+.cam-view.stale canvas { opacity: .5; }
+.cam-grid { position: absolute; pointer-events: none; display: none; }
+.cam-view.grid .cam-grid { display: block; }
+.cam-empty[hidden] { display: none; }
+.cam-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; color: #A9B5C2; font-size: 14px; }
+.cam-meta { margin: 8px 0 0; color: var(--muted); font-size: 13px; min-height: 1.5em; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 12px; }
+.save { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.save p { margin: 0 0 8px; font-size: 14px; }
+.save .btn { border-left: 6px solid var(--c); }
+
+/* linha / histórico */
+.counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.count { background: var(--well); border: 1px solid var(--line); border-radius: 4px; padding: 8px 6px 6px; text-align: center; border-bottom: 4px solid var(--c); }
+.count canvas { width: 40px; height: 32px; image-rendering: pixelated; display: block; margin: 0 auto; }
+.count b { display: block; font-family: var(--pixel); font-weight: 400; font-size: 26px; line-height: 1.1; margin-top: 4px; }
+.count span { font-size: 13px; color: var(--muted); }
+.timeline { display: block; width: 100%; height: 64px; margin-top: 14px; image-rendering: pixelated; background: var(--well); border: 1px solid var(--line); border-radius: 3px; }
+
+/* console */
+.log { margin: 0; height: 260px; overflow: auto; background: var(--well); border: 1px solid var(--line); border-radius: 4px;
+  padding: 8px 10px; font: 12.5px/1.55 var(--mono); white-space: pre-wrap; word-break: break-all; }
+.log .t { color: var(--muted); }
+.log .tx { color: var(--focus); }
+.log .err { color: var(--c-amassada); }
+.log .warn { color: var(--c-aberta); }
+.log .proto { color: var(--muted); }
+.log .sys { color: var(--muted); font-style: italic; }
+.send { display: flex; gap: 8px; margin-top: 10px; }
+.send input { flex: 1; min-width: 0; padding: 7px 10px; background: var(--well); border: 1px solid var(--line); border-radius: 4px; font-family: var(--mono); font-size: 13px; }
+.quick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fill, .switch .track-s::after { transition: none; }
+  .screen.alert { animation: none; box-shadow: inset 0 0 0 5px var(--alert-c, var(--c-amassada)); }
+}
+</style>
+</head>
+<body>
+<header class="masthead">
+  <div class="brand">
+    <canvas id="logo" width="40" height="32" aria-hidden="true"></canvas>
+    <div>
+      <h1>Inspetor de caixas</h1>
+      <p>Monitor serial do ESP32-S3 com Edge Impulse</p>
+    </div>
+  </div>
+  <div class="conn">
+    <span class="status" id="status" data-s="off" role="status"><i></i><span id="statusText">Desconectado</span></span>
+    <label class="field">Velocidade
+      <select id="baud">
+        <option value="115200">115200</option>
+        <option value="230400">230400</option>
+        <option value="460800">460800</option>
+        <option value="921600" selected>921600</option>
+        <option value="2000000">2000000</option>
+      </select>
+    </label>
+    <button class="btn primary" id="btnConnect">Conectar</button>
+    <button class="btn" id="btnDemo">Modo demonstração</button>
+  </div>
+</header>
+<div class="banner" id="banner" hidden role="alert"><span id="bannerText"></span><button class="link" id="bannerClose">Fechar</button></div>
+
+<main>
+  <section class="stage" aria-label="Veredito">
+    <div class="crt">
+      <div class="screen" id="screen">
+        <canvas id="scene" width="160" height="120" aria-hidden="true"></canvas>
+        <div class="hud">
+          <div class="hud-top"><span id="hudConf">--%</span><span id="hudRate">0,0 leituras/s</span></div>
+          <div>
+            <div class="hud-class" id="hudClass" aria-live="polite">Aguardando</div>
+            <div class="hud-sub" id="hudSub">Conecte a placa ou abra o modo demonstração</div>
+          </div>
+        </div>
+      </div>
+      <div class="crt-foot"><span><span class="led" id="ledRx"></span>Recebendo</span><span id="fwInfo">Firmware não identificado</span></div>
+    </div>
+  </section>
+
+  <section class="panel readout">
+    <div class="panel-head"><h2>Probabilidades</h2></div>
+    <ul class="bars" id="bars"></ul>
+    <div class="tune">
+      <label for="thr">Confiança mínima <input type="range" id="thr" min="30" max="95" step="5" value="60"><output id="thrOut" for="thr">60%</output></label>
+      <label for="stab">Confirmar após
+        <select id="stab"><option value="1">1 leitura</option><option value="3" selected>3 leituras</option><option value="5">5 leituras</option></select>
+      </label>
+    </div>
+    <dl class="stats">
+      <div><dt>Pré-processamento</dt><dd id="sDsp">--</dd></div>
+      <div><dt>Classificação</dt><dd id="sCls">--</dd></div>
+      <div><dt>Leituras</dt><dd id="sCount">0</dd></div>
+      <div><dt>Memória livre</dt><dd id="sHeap">--</dd></div>
+      <div><dt>Temperatura</dt><dd id="sTemp">--</dd></div>
+      <div><dt>Anomalia</dt><dd id="sAnom">--</dd></div>
+    </dl>
+  </section>
+
+  <section class="panel camera">
+    <div class="panel-head">
+      <h2>Câmera</h2>
+      <label class="switch"><input type="checkbox" id="camToggle"><span class="track-s"></span>Enviar imagem a cada leitura</label>
+    </div>
+    <div class="cam-view" id="camView">
+      <canvas id="camCanvas" width="96" height="96"></canvas>
+      <div class="cam-grid" id="camGrid"></div>
+      <div class="cam-empty" id="camEmpty">Ligue o envio de imagem ou peça um quadro para ver exatamente o que o modelo recebe.</div>
+    </div>
+    <p class="cam-meta" id="camMeta"></p>
+    <div class="row">
+      <button class="btn small" id="btnSnap">Pedir um quadro</button>
+      <label class="check"><input type="checkbox" id="optPixel" checked>Pixels nítidos</label>
+      <label class="check"><input type="checkbox" id="optSwap">Inverter vermelho e azul</label>
+      <label class="check"><input type="checkbox" id="optGrid">Grade de 8 px</label>
+    </div>
+    <div class="save">
+      <p>Salvar este quadro para o dataset como</p>
+      <div class="row" id="saveRow" style="margin-top:0"></div>
+      <p class="hint">O nome do arquivo começa com o rótulo, assim o uploader do Edge Impulse já identifica a classe.</p>
+    </div>
+  </section>
+
+  <section class="panel history">
+    <div class="panel-head"><h2>Linha</h2><button class="btn small" id="btnResetCount">Zerar contagem</button></div>
+    <div class="counts" id="counts"></div>
+    <p class="hint">Conta uma caixa sempre que a linha sai de vazio e o resultado se confirma.</p>
+    <canvas class="timeline" id="timeline" width="240" height="40" aria-label="Últimas leituras"></canvas>
+    <p class="hint">Cada coluna é uma leitura, da mais antiga à mais recente. A altura é a confiança.</p>
+    <div class="row">
+      <label class="check"><input type="checkbox" id="optBeep">Bipe quando a caixa estiver amassada ou aberta</label>
+      <button class="btn small" id="btnCsv">Exportar CSV</button>
+    </div>
+  </section>
+
+  <section class="panel console">
+    <div class="panel-head">
+      <h2>Console</h2>
+      <div class="row" style="margin-top:0">
+        <label class="switch"><input type="checkbox" id="logToggle" checked><span class="track-s"></span>Logs do firmware</label>
+        <label class="check"><input type="checkbox" id="optProto" checked>Esconder mensagens do protocolo</label>
+        <label class="check"><input type="checkbox" id="optScroll" checked>Rolar junto</label>
+        <button class="btn small" id="btnClear">Limpar</button>
+      </div>
+    </div>
+    <pre class="log" id="log" aria-live="off"></pre>
+    <div class="send">
+      <label class="sr" for="cmd">Comando</label>
+      <input id="cmd" placeholder="Comando para o ESP32, por exemplo PING" autocomplete="off" spellcheck="false">
+      <button class="btn small" id="btnSend">Enviar</button>
+    </div>
+    <div class="quick">
+      <button class="btn small" id="btnPause">Pausar inferência</button>
+      <button class="btn small" data-cmd="PING">Identificar firmware</button>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ===== Renderizador 3D de baixa resolução (estilo console antigo) ===== */
+const V3 = {
+  add:(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]],
+  sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],
+  mul:(a,s)=>[a[0]*s,a[1]*s,a[2]*s],
+  dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
+  cross:(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
+  norm:(a)=>{const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l];},
+  lerp:(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t],
+};
+
+function createRenderer(W, H, opts = {}) {
+  const buf = new Uint32Array(W * H);
+  const zb = new Float32Array(W * H);
+  const BAY = [0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5].map(v => (v + 0.5) / 16);
+  const LEVELS = 7;
+  const F = W * (opts.focal || 0.8);
+  const cy = H * (opts.cy || 0.5);
+  const dither = opts.dither !== false;
+  const cam = { yaw: 0.5, pitch: 0.5, dist: 5.4, ty: 0.35 };
+  const LIGHT = V3.norm([-0.45, 0.85, -0.4]);
+  let sat = 1;
+
+  const pack = (r,g,b) => ((255 << 24) | ((b & 255) << 16) | ((g & 255) << 8) | (r & 255)) >>> 0;
+  function color(rgb, k) {
+    let r = rgb[0]*k, g = rgb[1]*k, b = rgb[2]*k;
+    if (sat < 1) { const m = (r+g+b)/3; r = m+(r-m)*sat; g = m+(g-m)*sat; b = m+(b-m)*sat; }
+    return pack(Math.min(255, r), Math.min(255, g), Math.min(255, b));
+  }
+  function clear(top, bot) {
+    zb.fill(Infinity);
+    if (!top) { buf.fill(0); return; }
+    for (let y = 0; y < H; y++) {
+      const t = y / (H - 1);
+      const v = t * 6, lo = Math.floor(v), fr = v - lo;
+      const cA = pack(...V3.lerp(top, bot, lo / 6).map(Math.round));
+      const cB = pack(...V3.lerp(top, bot, Math.min(6, lo + 1) / 6).map(Math.round));
+      for (let x = 0; x < W; x++) buf[y*W+x] = BAY[(y&3)*4+(x&3)] < fr ? cB : cA;
+    }
+  }
+  function toView(p, m) {
+    const x = p[0]*m.s + m.ox, y = p[1]*m.s + m.oy, z = p[2]*m.s + m.oz;
+    const c = Math.cos(cam.yaw), s = Math.sin(cam.yaw);
+    const x1 = x*c + z*s, z1 = -x*s + z*c;
+    const yy = y - cam.ty;
+    const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+    return [x1, yy*cp + z1*sp, -yy*sp + z1*cp + cam.dist];
+  }
+  // projeção com "snap" no pixel inteiro, como nos consoles antigos
+  const proj = v => [Math.round(W/2 + v[0]*F/v[2]), Math.round(cy - v[1]*F/v[2]), v[2]];
+
+  function tri(a, b, c, cLo, cHi, fr) {
+    const area = (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]);
+    if (area === 0) return;
+    const sgn = area < 0 ? -1 : 1, inv = 1 / Math.abs(area);
+    const minX = Math.max(0, Math.min(a[0],b[0],c[0])), maxX = Math.min(W-1, Math.max(a[0],b[0],c[0]));
+    const minY = Math.max(0, Math.min(a[1],b[1],c[1])), maxY = Math.min(H-1, Math.max(a[1],b[1],c[1]));
+    for (let y = minY; y <= maxY; y++) {
+      const py = y + 0.5;
+      for (let x = minX; x <= maxX; x++) {
+        const px = x + 0.5;
+        const w0 = sgn*((c[0]-b[0])*(py-b[1]) - (c[1]-b[1])*(px-b[0]));
+        if (w0 < 0) continue;
+        const w1 = sgn*((a[0]-c[0])*(py-c[1]) - (a[1]-c[1])*(px-c[0]));
+        if (w1 < 0) continue;
+        const w2 = sgn*((b[0]-a[0])*(py-a[1]) - (b[1]-a[1])*(px-a[0]));
+        if (w2 < 0) continue;
+        const z = (w0*a[2] + w1*b[2] + w2*c[2]) * inv;
+        const i = y*W + x;
+        if (z < zb[i]) { zb[i] = z; buf[i] = BAY[(y&3)*4+(x&3)] < fr ? cHi : cLo; }
+      }
+    }
+  }
+  function shadeTri(v0, v1, v2, nRef, base, baseIn, k0) {
+    let n = V3.norm(V3.cross(V3.sub(v1, v0), V3.sub(v2, v0)));
+    if (V3.dot(n, nRef) < 0) n = V3.mul(n, -1);
+    const ctr = V3.mul(V3.add(V3.add(v0, v1), v2), 1/3);
+    let col = base, k = k0;
+    if (V3.dot(n, ctr) > 0) { n = V3.mul(n, -1); col = baseIn; k *= 0.7; } // lado de dentro
+    const I = (0.34 + 0.66 * Math.max(0, V3.dot(n, LIGHT))) * k;
+    const v = Math.min(LEVELS, I * LEVELS), lo = dither ? Math.floor(v) : Math.round(v);
+    const cLo = color(col, (lo / LEVELS) * 1.12), cHi = color(col, (Math.min(LEVELS, lo+1) / LEVELS) * 1.12);
+    tri(proj(v0), proj(v1), proj(v2), cLo, cHi, dither ? v - lo : 0);
+  }
+  // quad: 4 pontos (modelo). opt: c, ci (cor do lado de dentro), out (vetor normal externo no modelo), dent
+  function quad(pts, opt, m) {
+    const v = pts.map(p => toView(p, m));
+    const mc = V3.mul(pts.reduce((s, p) => V3.add(s, p), [0,0,0]), 0.25);
+    const outV = V3.sub(toView(V3.add(mc, opt.out), m), toView(mc, m));
+    let ctr = V3.mul(v.reduce((s, p) => V3.add(s, p), [0,0,0]), 0.25);
+    if (opt.dent) ctr = V3.add(ctr, V3.mul(V3.norm(outV), opt.dent * m.s));
+    const ci = opt.ci || opt.c, k = opt.k || 1;
+    for (let i = 0; i < 4; i++) shadeTri(v[i], v[(i+1)%4], ctr, outV, opt.c, ci, k);
+  }
+  function line(a, b, col, m, dash) {
+    let [x0, y0] = proj(toView(a, m)), [x1, y1] = proj(toView(b, m));
+    const dx = Math.abs(x1-x0), dy = -Math.abs(y1-y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy, i = 0; const c = pack(...col);
+    for (;;) {
+      if (x0 >= 0 && x0 < W && y0 >= 0 && y0 < H && (!dash || ((i >> 1) & 1) === 0)) buf[y0*W+x0] = c;
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2*err; if (e2 >= dy) { err += dy; x0 += sx; } if (e2 <= dx) { err += dx; y0 += sy; }
+      i++;
+    }
+  }
+  return { W, H, buf, cam, clear, quad, line, setSat: s => { sat = s; } };
+}
+
+/* ===== Cena: caixa de papelão sobre a esteira ===== */
+const BOX = (() => {
+  const W2 = 0.75, D2 = 0.55, HH = 0.9, Y0 = 0.012;
+  const KRAFT = [204,150,92], KIN = [120,80,46], FLAPIN = [176,124,74], TAPE = [232,210,160];
+  const LABEL = [240,238,228], INK = [48,50,58];
+  const BELT = [62,68,78], BELT2 = [46,50,58], RAIL = [150,160,172], SAFE = [242,194,48], DARK = [36,40,48];
+  const GHOST = [150,180,220];
+  const UP = [0,1,0], DOWN = [0,-1,0];
+
+  function corners(state) {
+    const B = [[-W2,Y0,-D2],[W2,Y0,-D2],[W2,Y0,D2],[-W2,Y0,D2]];
+    const T = [[-W2,HH,-D2],[W2,HH,-D2],[W2,HH,D2],[-W2,HH,D2]];
+    if (state === 'amassada') {
+      const d = (p, o) => { p[0]+=o[0]; p[1]+=o[1]; p[2]+=o[2]; };
+      d(T[1],[-0.12,-0.32,0.1]); d(T[2],[0.03,-0.14,-0.02]); d(T[0],[0.03,-0.06,0.02]);
+      d(B[1],[-0.06,0,0.05]); d(T[3],[0,0.03,0]);
+    }
+    return { B, T };
+  }
+  function faceNormal(p) { return V3.norm(V3.cross(V3.sub(p[2], p[0]), V3.sub(p[3], p[1]))); }
+  function outward(p, ref) { let n = faceNormal(p); const c = V3.mul(p.reduce((s,q)=>V3.add(s,q),[0,0,0]),0.25); if (V3.dot(n, V3.sub(c, ref)) < 0) n = V3.mul(n,-1); return n; }
+  function bil(p, u, v) { return V3.lerp(V3.lerp(p[0], p[1], u), V3.lerp(p[3], p[2], u), v); }
+  function onFace(face, n, u0, u1, v0, v1, off) {
+    const o = V3.mul(n, off);
+    return [bil(face,u0,v0), bil(face,u1,v0), bil(face,u1,v1), bil(face,u0,v1)].map(p => V3.add(p, o));
+  }
+
+  function belt(R, m, t) {
+    const X = 2.8, Zf = -1.15, Zb = 1.15, RH = 0.16;
+    R.quad([[-X,0,Zf],[X,0,Zf],[X,0,Zb],[-X,0,Zb]], { c: BELT, out: UP }, m);
+    const sp = 0.42, off = ((t * 0.6) % sp + sp) % sp;
+    for (let x = -X + off; x < X - 0.12; x += sp)
+      R.quad([[x,0.004,Zf],[x+0.12,0.004,Zf],[x+0.12,0.004,Zb],[x,0.004,Zb]], { c: BELT2, out: UP }, m);
+    for (const z of [Zf, Zb]) {
+      const zo = z < 0 ? z - 0.12 : z + 0.12, s = Math.sign(z);
+      R.quad([[-X,RH,z],[X,RH,z],[X,RH,zo],[-X,RH,zo]], { c: RAIL, out: UP }, m);
+      R.quad([[-X,0,z],[X,0,z],[X,RH,z],[-X,RH,z]], { c: RAIL, out: [0,0,-s], k: 0.9 }, m);
+      // faixa de segurança zebrada na lateral externa
+      const seg = 0.32;
+      for (let x = -X, i = 0; x < X - 0.01; x += seg, i++)
+        R.quad([[x,-0.36,zo],[Math.min(X,x+seg),-0.36,zo],[Math.min(X,x+seg),RH,zo],[x,RH,zo]], { c: i % 2 ? DARK : SAFE, out: [0,0,s] }, m);
+    }
+  }
+
+  function ghost(R, m, t, col) {
+    if (((t * 1.6) % 2) > 1.35) return;
+    const { B, T } = corners('fechada');
+    const E = [[0,1],[1,2],[2,3],[3,0]];
+    for (const [a, b] of E) { R.line(B[a], B[b], col || GHOST, m, true); R.line(T[a], T[b], col || GHOST, m, true); }
+    for (let i = 0; i < 4; i++) R.line(B[i], T[i], col || GHOST, m, true);
+  }
+
+  function box(R, m, state, t) {
+    const { B, T } = corners(state);
+    const C = [0, HH * 0.45, 0];
+    const walls = [[B[0],B[1],T[1],T[0]],[B[1],B[2],T[2],T[1]],[B[2],B[3],T[3],T[2]],[B[3],B[0],T[0],T[3]]];
+    const dents = state === 'amassada' ? [-0.07, -0.18, 0, 0.0] : [0,0,0,0];
+    const normals = walls.map(w => outward(w, C));
+    walls.forEach((w, i) => R.quad(w, { c: KRAFT, ci: KIN, out: normals[i], dent: dents[i] }, m));
+    R.quad([B[0],B[1],B[2],B[3]], { c: KIN, ci: KIN, out: DOWN }, m);
+
+    function flap(A, Bp, u, len, th, inset) {
+      const d = [u[0]*Math.cos(th), Math.sin(th), u[2]*Math.cos(th)];
+      const nOut = [-u[0]*Math.sin(th), Math.cos(th), -u[2]*Math.sin(th)];
+      const A2 = V3.lerp(A, Bp, inset), B2 = V3.lerp(Bp, A, inset);
+      const lift = [0, 0.006, 0];
+      R.quad([V3.add(A2,lift), V3.add(B2,lift), V3.add(V3.add(B2, V3.mul(d, len)),lift), V3.add(V3.add(A2, V3.mul(d, len)),lift)],
+        { c: KRAFT, ci: FLAPIN, out: nOut }, m);
+    }
+    const wob = (a, f, ph) => a * Math.sin(t * f + ph);
+    if (state === 'fechada') {
+      flap(T[0], T[1], [0,0,1], D2 - 0.012, 0, 0);
+      flap(T[2], T[3], [0,0,-1], D2 - 0.012, 0, 0);
+      const ty = HH + 0.016, tw = 0.1;
+      R.quad([[-W2-0.004,ty,-tw],[W2+0.004,ty,-tw],[W2+0.004,ty,tw],[-W2-0.004,ty,tw]], { c: TAPE, out: UP }, m);
+      for (const sx of [1, -1]) {
+        const x = sx * (W2 + 0.012);
+        R.quad([[x,ty,-tw],[x,ty,tw],[x,HH-0.3,tw],[x,HH-0.3,-tw]], { c: TAPE, out: [sx,0,0] }, m);
+      }
+    } else if (state === 'aberta') {
+      flap(T[0], T[1], [0,0,1], D2 * 0.95, 2.2 + wob(0.1, 3, 0), 0.01);
+      flap(T[2], T[3], [0,0,-1], D2 * 0.95, 2.25 + wob(0.1, 3, 1.3), 0.01);
+      flap(T[1], T[2], [-1,0,0], 0.5, 1.95 + wob(0.12, 2.6, 2), 0.04);
+      flap(T[3], T[0], [1,0,0], 0.5, 2.0 + wob(0.12, 2.6, 0.4), 0.04);
+    } else if (state === 'amassada') {
+      flap(T[0], T[1], [0,0,1], D2 - 0.02, 0.42, 0.02);
+      flap(T[2], T[3], [0,0,-1], D2 - 0.02, 0.1, 0.02);
+      flap(T[1], T[2], [-1,0,0], 0.42, 0.75, 0.06);
+    }
+    // etiqueta na face da frente
+    const front = walls[0], nF = normals[0];
+    R.quad(onFace(front, nF, 0.1, 0.46, 0.28, 0.62, 0.016), { c: LABEL, out: nF }, m);
+    R.quad(onFace(front, nF, 0.15, 0.41, 0.5, 0.55, 0.022), { c: INK, out: nF }, m);
+    R.quad(onFace(front, nF, 0.15, 0.33, 0.38, 0.42, 0.022), { c: INK, out: nF }, m);
+  }
+
+  // estado: 'fechada' | 'aberta' | 'amassada' | 'vazio' | 'none'
+  function draw(R, state, t, o = {}) {
+    R.setSat(o.sat == null ? 1 : o.sat);
+    R.clear(o.bg === false ? null : [20,28,42], [56,70,92]);
+    const m0 = { s: 1, ox: 0, oy: 0, oz: 0 };
+    if (o.belt !== false) belt(R, m0, o.beltT == null ? t : o.beltT);
+    const m = { s: o.scale || 1, ox: 0, oy: o.lift || 0, oz: 0 };
+    if (state === 'vazio' || state === 'none') ghost(R, m, o.ghostT == null ? t : o.ghostT, o.ghostColor);
+    else box(R, m, state, t);
+  }
+  return { draw };
+})();
+
+</script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder();
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const CLASSES = [
+  { key: 'fechada',  name: 'Fechada',  css: '--c-fechada' },
+  { key: 'aberta',   name: 'Aberta',   css: '--c-aberta' },
+  { key: 'amassada', name: 'Amassada', css: '--c-amassada' },
+  { key: 'vazio',    name: 'Vazio',    css: '--c-vazio' },
+];
+const BY = Object.fromEntries(CLASSES.map(c => [c.key, c]));
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const colorOf = k => cssVar(k === 'incerto' ? '--c-incerto' : BY[k].css);
+const ALIASES = {
+  fechada: ['fechada', 'fechado', 'closed', 'close', 'sealed', 'ok'],
+  aberta: ['aberta', 'aberto', 'open', 'opened'],
+  amassada: ['amassada', 'amassado', 'crushed', 'damaged', 'dented', 'danificada', 'danificado'],
+  vazio: ['vazio', 'vazia', 'empty', 'none', 'background', 'fundo', 'nada', 'sem caixa', 'no box'],
+};
+function canonical(label) {
+  const n = String(label).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[_\-]+/g, ' ').trim();
+  for (const k in ALIASES) if (ALIASES[k].includes(n)) return k;
+  for (const k in ALIASES) if (ALIASES[k].some(a => a.length > 3 && n.startsWith(a))) return k;
+  return null;
+}
+const fmt = (v, d = 1) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+/* ---------- ícones pixelados (mesmo renderizador da cena) ---------- */
+const iconR = createRenderer(40, 32, { focal: 1.0, cy: 0.64, dither: false });
+Object.assign(iconR.cam, { dist: 3.3, ty: 0.45, yaw: 0.6, pitch: 0.55 });
+function paintIcon(canvas, key) {
+  BOX.draw(iconR, key, 0, { belt: false, bg: false, ghostT: 0, ghostColor: [110, 126, 148] });
+  const ctx = canvas.getContext('2d');
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(iconR.buf.buffer.slice(0)), 40, 32), 0, 0);
+}
+paintIcon($('logo'), 'fechada');
+
+/* ---------- barras, contadores, botões de salvar ---------- */
+const barEls = {};
+for (const c of CLASSES) {
+  const li = document.createElement('li');
+  li.style.setProperty('--c', `var(${c.css})`);
+  li.innerHTML = `<canvas width="40" height="32" aria-hidden="true"></canvas><span class="name">${c.name}</span>
+    <div class="track" role="meter" aria-label="${c.name}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div></div><span class="pct">--</span>`;
+  paintIcon(li.querySelector('canvas'), c.key);
+  $('bars').appendChild(li);
+  barEls[c.key] = { li, fill: li.querySelector('.fill'), pct: li.querySelector('.pct'), track: li.querySelector('.track') };
+
+  const tile = document.createElement('div');
+  tile.className = 'count'; tile.style.setProperty('--c', `var(${c.css})`);
+  tile.innerHTML = `<canvas width="40" height="32" aria-hidden="true"></canvas><b id="n_${c.key}">0</b><span>${c.key === 'vazio' ? 'Incertas' : c.name}</span>`;
+  paintIcon(tile.querySelector('canvas'), c.key === 'vazio' ? 'none' : c.key);
+  $('counts').appendChild(tile);
+
+  const b = document.createElement('button');
+  b.className = 'btn small'; b.textContent = c.name; b.style.setProperty('--c', `var(${c.css})`);
+  b.addEventListener('click', () => saveFrame(c.key));
+  $('saveRow').appendChild(b);
+}
+// o quarto contador mostra caixas que passaram sem confirmação
+document.querySelector('.count:last-child').style.setProperty('--c', 'var(--c-incerto)');
+
+/* ---------- console ---------- */
+const logEl = $('log');
+const logLines = [];
+let logQueue = [];
+function stamp() { const d = new Date(); return d.toLocaleTimeString('pt-BR') + '.' + String(d.getMilliseconds()).padStart(3, '0'); }
+function log(text, kind = '') {
+  const e = { t: stamp(), text, kind };
+  logLines.push(e); if (logLines.length > 800) logLines.shift();
+  logQueue.push(e);
+}
+function lineEl(e) {
+  const s = document.createElement('span');
+  if (e.kind) s.className = e.kind;
+  const t = document.createElement('span'); t.className = 't'; t.textContent = e.t + '  ';
+  s.append(t, document.createTextNode(e.text + '\n'));
+  return s;
+}
+const visible = e => !(e.kind === 'proto' && $('optProto').checked);
+function flushLog() {
+  if (!logQueue.length) return;
+  const frag = document.createDocumentFragment();
+  for (const e of logQueue) if (visible(e)) frag.appendChild(lineEl(e));
+  logQueue = [];
+  logEl.appendChild(frag);
+  while (logEl.childNodes.length > 600) logEl.removeChild(logEl.firstChild);
+  if ($('optScroll').checked) logEl.scrollTop = logEl.scrollHeight;
+}
+function rebuildLog() {
+  logEl.textContent = ''; logQueue = [];
+  const frag = document.createDocumentFragment();
+  for (const e of logLines.slice(-600)) if (visible(e)) frag.appendChild(lineEl(e));
+  logEl.appendChild(frag); logEl.scrollTop = logEl.scrollHeight;
+}
+$('optProto').addEventListener('change', rebuildLog);
+$('btnClear').addEventListener('click', () => { logLines.length = 0; rebuildLog(); });
+
+function banner(text) { $('bannerText').textContent = text; $('banner').hidden = false; }
+$('bannerClose').addEventListener('click', () => { $('banner').hidden = true; });
+
+/* ---------- leitor do protocolo (texto + imagem binária) ---------- */
+class Parser {
+  constructor(onLine, onImage) {
+    this.buf = new Uint8Array(1 << 16); this.len = 0; this.img = null;
+    this.dec = new TextDecoder('utf-8'); this.onLine = onLine; this.onImage = onImage;
+  }
+  push(chunk) {
+    if (this.len + chunk.length > this.buf.length) {
+      const nb = new Uint8Array(Math.max(this.buf.length * 2, this.len + chunk.length));
+      nb.set(this.buf.subarray(0, this.len)); this.buf = nb;
+    }
+    this.buf.set(chunk, this.len); this.len += chunk.length;
+    this.process();
+  }
+  process() {
+    let pos = 0;
+    while (pos < this.len) {
+      if (this.img) {
+        const take = Math.min(this.img.len - this.img.got, this.len - pos);
+        this.img.data.set(this.buf.subarray(pos, pos + take), this.img.got);
+        this.img.got += take; pos += take;
+        if (this.img.got === this.img.len) { const im = this.img; this.img = null; this.onImage(im); }
+        continue;
+      }
+      const nl = this.buf.subarray(0, this.len).indexOf(10, pos);
+      if (nl === -1) {
+        if (this.len - pos > 4096) { this.onLine(this.dec.decode(this.buf.subarray(pos, this.len))); pos = this.len; }
+        break;
+      }
+      let line = this.dec.decode(this.buf.subarray(pos, nl)); pos = nl + 1;
+      if (line.endsWith('\r')) line = line.slice(0, -1);
+      if (line.startsWith('#IMG ')) {
+        const [w, h, f, len] = line.slice(5).trim().split(/\s+/);
+        const W = +w, H = +h, L = +len, F = (f || '').toLowerCase();
+        if (W > 0 && H > 0 && L > 0 && L < 4e6) { this.img = { w: W, h: H, fmt: F, len: L, got: 0, data: new Uint8Array(L), t0: performance.now() }; this.onLine(line, true); continue; }
+        this.onLine(line);
+        continue;
+      }
+      if (line.length) this.onLine(line);
+    }
+    if (pos > 0) { this.buf.copyWithin(0, pos, this.len); this.len -= pos; }
+  }
+  watchdog() {
+    if (this.img && performance.now() - this.img.t0 > 4000) {
+      log(`Imagem incompleta descartada (${this.img.got} de ${this.img.len} bytes). Verifique a velocidade da serial.`, 'warn');
+      this.img = null; this.process();
+    }
+  }
+  reset() { this.len = 0; this.img = null; }
+}
+const parser = new Parser(onLine, onImage);
+setInterval(() => parser.watchdog(), 1000);
+
+/* ---------- estado da inspeção ---------- */
+const S = {
+  probs: null, top: null, conf: 0, stable: null, cand: null, run: 0,
+  lastInfT: 0, rate: 0, count: 0, hist: [], csv: [],
+  boxes: { fechada: 0, aberta: 0, amassada: 0, incerta: 0 }, lastStableBox: 'vazio',
+  unknown: new Set(), rxT: 0,
+};
+
+let lastRx = 0;
+function onLine(line, isImgHeader) {
+  lastRx = performance.now();
+  if (isImgHeader) { log(line, 'proto'); return; }
+  if (line.startsWith('#INF ')) {
+    log(line, 'proto');
+    try { handleInf(JSON.parse(line.slice(5))); }
+    catch (e) { log('Linha #INF com JSON inválido: ' + e.message, 'err'); }
+    return;
+  }
+  if (line.startsWith('#HELLO ')) { log(line, 'proto'); try { handleHello(JSON.parse(line.slice(7))); } catch { log('Linha #HELLO com JSON inválido', 'err'); } return; }
+  if (line.startsWith('#ACK ')) { log(line, 'proto'); handleAck(line.slice(5).trim()); return; }
+  if (line.startsWith('#ERR ')) { log(line.slice(5), 'err'); return; }
+  log(line);
+}
+
+function handleHello(o) {
+  const parts = [];
+  if (o.proj) parts.push(o.proj);
+  if (o.w && o.h) parts.push(`entrada ${o.w}×${o.h}`);
+  if (o.labels) parts.push(`${o.labels.length} classes`);
+  $('fwInfo').textContent = parts.join(', ') || 'Firmware identificado';
+  if (Array.isArray(o.labels)) {
+    const bad = o.labels.filter(l => !canonical(l));
+    if (bad.length) banner(`Os rótulos ${bad.map(b => `"${b}"`).join(', ')} não correspondem a fechada, aberta, amassada ou vazio. Eles aparecem só no console.`);
+  }
+  if (typeof o.cam === 'boolean' && o.cam !== $('camToggle').checked) sendCmd($('camToggle').checked ? 'CAM 1' : 'CAM 0');
+  if (typeof o.log === 'boolean' && o.log !== $('logToggle').checked) sendCmd($('logToggle').checked ? 'LOG 1' : 'LOG 0');
+  if (typeof o.paused === 'boolean') setPaused(o.paused);
+}
+
+function handleInf(o) {
+  const p = { fechada: 0, aberta: 0, amassada: 0, vazio: 0 };
+  let known = 0;
+  for (const [lab, val] of Object.entries(o.p || {})) {
+    const k = canonical(lab);
+    if (k) { p[k] = Math.max(0, Math.min(1, +val || 0)); known++; }
+    else if (!S.unknown.has(lab)) { S.unknown.add(lab); log(`Rótulo "${lab}" não reconhecido, ignorado na tela.`, 'warn'); }
+  }
+  if (!known) return;
+  const now = performance.now();
+  if (S.lastInfT) { const inst = 1000 / Math.max(1, now - S.lastInfT); S.rate = S.rate ? S.rate * 0.8 + inst * 0.2 : inst; }
+  S.lastInfT = now;
+  S.count++;
+  S.probs = p;
+  let top = 'vazio', conf = -1;
+  for (const k in p) if (p[k] > conf) { conf = p[k]; top = k; }
+  S.top = top; S.conf = conf;
+
+  const thr = +$('thr').value / 100;
+  const cand = conf >= thr ? top : 'incerto';
+  S.run = cand === S.cand ? S.run + 1 : 1; S.cand = cand;
+  if (S.run >= +$('stab').value && cand !== S.stable) setStable(cand);
+
+  S.hist.push({ k: cand, conf }); if (S.hist.length > 120) S.hist.shift();
+  S.csv.push([new Date().toISOString(), top, conf, p.fechada, p.aberta, p.amassada, p.vazio, o.dsp ?? '', o.cls ?? '', o.anom ?? '']);
+  if (S.csv.length > 20000) S.csv.shift();
+
+  for (const c of CLASSES) {
+    const v = p[c.key] * 100, e = barEls[c.key];
+    e.fill.style.width = v.toFixed(1) + '%';
+    e.pct.textContent = Math.round(v) + '%';
+    e.track.setAttribute('aria-valuenow', Math.round(v));
+    e.li.classList.toggle('top', c.key === top);
+  }
+  $('sDsp').textContent = o.dsp != null ? `${o.dsp} ms` : '--';
+  $('sCls').textContent = o.cls != null ? `${o.cls} ms` : '--';
+  $('sCount').textContent = S.count.toLocaleString('pt-BR');
+  $('sHeap').textContent = o.heap != null ? `${fmt(o.heap / 1024, 0)} kB` : '--';
+  $('sTemp').textContent = o.temp != null ? `${fmt(o.temp, 1)} °C` : '--';
+  $('sAnom').textContent = o.anom != null ? fmt(o.anom, 2) : '--';
+  $('hudConf').textContent = Math.round(conf * 100) + '%';
+  drawTimeline();
+}
+
+let alertTimer = 0;
+function setStable(k) {
+  const prev = S.stable;
+  S.stable = k;
+  const name = k === 'incerto' ? 'Incerto' : BY[k].name;
+  $('hudClass').textContent = name;
+  $('hudClass').style.setProperty('--hud-c', colorOf(k));
+  $('hudSub').textContent = {
+    fechada: 'Caixa lacrada, pode seguir', aberta: 'Abas abertas, separar para fechar',
+    amassada: 'Caixa danificada, retirar da linha', vazio: 'Nenhuma caixa na frente da câmera',
+    incerto: `Nenhuma classe acima de ${$('thr').value}%`,
+  }[k];
+  scene.set(k);
+  // contagem de caixas: cada saída de "vazio" é uma caixa nova
+  if (k !== 'vazio' && S.lastStableBox === 'vazio') {
+    const key = k === 'incerto' ? 'incerta' : k;
+    S.boxes[key]++; S.boxBucket = key; paintCounts();
+  } else if (k !== 'vazio' && S.boxBucket && S.boxBucket !== (k === 'incerto' ? 'incerta' : k) && k !== 'incerto') {
+    // a mesma caixa foi reclassificada com confiança, corrige o contador
+    S.boxes[S.boxBucket]--; S.boxBucket = k; S.boxes[k]++; paintCounts();
+  }
+  if (k === 'vazio') S.boxBucket = null;
+  S.lastStableBox = k === 'vazio' ? 'vazio' : 'caixa';
+
+  if ((k === 'amassada' || k === 'aberta') && prev !== k) {
+    const scr = $('screen');
+    scr.style.setProperty('--alert-c', colorOf(k));
+    scr.classList.remove('alert'); void scr.offsetWidth; scr.classList.add('alert');
+    clearTimeout(alertTimer); alertTimer = setTimeout(() => scr.classList.remove('alert'), 1400);
+    if ($('optBeep').checked) beep(k === 'amassada' ? [880, 660, 880] : [660]);
+  }
+}
+function paintCounts() {
+  $('n_fechada').textContent = S.boxes.fechada;
+  $('n_aberta').textContent = S.boxes.aberta;
+  $('n_amassada').textContent = S.boxes.amassada;
+  $('n_vazio').textContent = S.boxes.incerta;
+}
+$('btnResetCount').addEventListener('click', () => { S.boxes = { fechada: 0, aberta: 0, amassada: 0, incerta: 0 }; paintCounts(); });
+$('thr').addEventListener('input', () => { $('thrOut').textContent = $('thr').value + '%'; });
+
+let audioCtx = null;
+function beep(freqs) {
+  try {
+    audioCtx = audioCtx || new AudioContext();
+    let t = audioCtx.currentTime;
+    for (const f of freqs) {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'square'; o.frequency.value = f; g.gain.value = 0.05;
+      o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + 0.09); t += 0.12;
+    }
+  } catch {}
+}
+
+function drawTimeline() {
+  const c = $('timeline'), ctx = c.getContext('2d'), W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+  const n = S.hist.length, colW = 2;
+  S.hist.forEach((h, i) => {
+    const x = W - (n - i) * colW, hh = Math.max(2, Math.round(h.conf * (H - 2)));
+    ctx.fillStyle = colorOf(h.k);
+    ctx.fillRect(x, H - hh, colW, hh);
+  });
+  ctx.fillStyle = cssVar('--muted');
+  const ty = H - Math.round((+$('thr').value / 100) * (H - 2));
+  for (let x = 0; x < W; x += 4) ctx.fillRect(x, ty, 2, 1);
+}
+
+$('btnCsv').addEventListener('click', () => {
+  if (!S.csv.length) { banner('Ainda não há leituras para exportar.'); return; }
+  const num = v => typeof v === 'number' ? String(+v.toFixed(4)).replace('.', ',') : v;
+  const rows = [['horario', 'classe', 'confianca', 'fechada', 'aberta', 'amassada', 'vazio', 'dsp_ms', 'classificacao_ms', 'anomalia'].join(';')]
+    .concat(S.csv.map(r => r.map(num).join(';')));
+  download(new Blob(['\ufeff' + rows.join('\r\n')], { type: 'text/csv' }), `leituras_caixas_${fileStamp()}.csv`);
+});
+function fileStamp() { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
+function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+
+/* ---------- câmera ---------- */
+let lastImg = null, lastImgT = 0, frameTimes = [];
+const camCanvas = $('camCanvas'), camCtx = camCanvas.getContext('2d');
+function onImage(im) {
+  lastImg = im; lastImgT = performance.now();
+  frameTimes.push(lastImgT); while (frameTimes.length > 8) frameTimes.shift();
+  drawFrame();
+}
+async function drawFrame() {
+  const im = lastImg; if (!im) return;
+  const swap = $('optSwap').checked;
+  let id;
+  if (im.fmt === 'jpeg' || im.fmt === 'jpg') {
+    try {
+      const bmp = await createImageBitmap(new Blob([im.data], { type: 'image/jpeg' }));
+      camCanvas.width = bmp.width; camCanvas.height = bmp.height; camCtx.drawImage(bmp, 0, 0);
+      if (!swap) { afterFrame(bmp.width, bmp.height); return; }
+      id = camCtx.getImageData(0, 0, bmp.width, bmp.height);
+      for (let i = 0; i < id.data.length; i += 4) { const r = id.data[i]; id.data[i] = id.data[i + 2]; id.data[i + 2] = r; }
+    } catch { log('Não consegui decodificar o JPEG recebido.', 'err'); return; }
+  } else {
+    const { w, h, data } = im, n = w * h;
+    id = new ImageData(w, h); const o = id.data;
+    if (im.fmt === 'gray' || im.fmt === 'grayscale') {
+      for (let i = 0; i < n; i++) { const v = data[i]; o[i*4] = o[i*4+1] = o[i*4+2] = v; o[i*4+3] = 255; }
+    } else if (im.fmt === 'rgb565') {
+      for (let i = 0; i < n; i++) {
+        const v = (data[i*2] << 8) | data[i*2+1];
+        o[i*4] = ((v >> 11) & 31) * 255 / 31 | 0; o[i*4+1] = ((v >> 5) & 63) * 255 / 63 | 0; o[i*4+2] = (v & 31) * 255 / 31 | 0; o[i*4+3] = 255;
+      }
+    } else {
+      const bgr = im.fmt === 'bgr888' || im.fmt === 'bgr';
+      for (let i = 0; i < n; i++) {
+        const a = data[i*3], b = data[i*3+1], c = data[i*3+2];
+        o[i*4] = bgr ? c : a; o[i*4+1] = b; o[i*4+2] = bgr ? a : c; o[i*4+3] = 255;
+      }
+    }
+    if (swap) for (let i = 0; i < o.length; i += 4) { const r = o[i]; o[i] = o[i + 2]; o[i + 2] = r; }
+    if (im.data.length < n * (im.fmt === 'gray' || im.fmt === 'grayscale' ? 1 : im.fmt === 'rgb565' ? 2 : 3))
+      log(`Imagem menor que ${w}×${h} no formato ${im.fmt}.`, 'warn');
+  }
+  camCanvas.width = id.width; camCanvas.height = id.height; camCtx.putImageData(id, 0, 0);
+  afterFrame(id.width, id.height);
+}
+function afterFrame(w, h) {
+  $('camEmpty').hidden = true;
+  const g = $('camGrid');
+  const r = camCanvas.getBoundingClientRect(), pr = camCanvas.parentElement.getBoundingClientRect();
+  Object.assign(g.style, { left: (r.left - pr.left) + 'px', top: (r.top - pr.top) + 'px', width: r.width + 'px', height: r.height + 'px',
+    backgroundImage: 'linear-gradient(to right, rgba(242,194,48,.45) 1px, transparent 1px), linear-gradient(to bottom, rgba(242,194,48,.45) 1px, transparent 1px)',
+    backgroundSize: `${r.width / (w / 8)}px ${r.height / (h / 8)}px` });
+  updateCamMeta();
+}
+function updateCamMeta() {
+  if (!lastImg) { $('camMeta').textContent = ''; return; }
+  const age = (performance.now() - lastImgT) / 1000;
+  let fps = 0;
+  if (frameTimes.length > 1) fps = (frameTimes.length - 1) * 1000 / (frameTimes[frameTimes.length - 1] - frameTimes[0]);
+  const fmtName = { bgr888: 'BGR888', rgb888: 'RGB888', rgb: 'RGB888', bgr: 'BGR888', gray: 'tons de cinza', grayscale: 'tons de cinza', rgb565: 'RGB565', jpeg: 'JPEG', jpg: 'JPEG' }[lastImg.fmt] || lastImg.fmt;
+  $('camMeta').textContent = `${lastImg.w} × ${lastImg.h} px em ${fmtName}, ${fmt(lastImg.len / 1024)} kB, ` +
+    (fps && age < 3 ? `${fmt(fps)} quadros/s, ` : '') + `recebido há ${fmt(age)} s`;
+  $('camView').classList.toggle('stale', age > 3);
+}
+$('optSwap').addEventListener('change', drawFrame);
+$('optPixel').addEventListener('change', e => $('camView').classList.toggle('smooth', !e.target.checked));
+$('optGrid').addEventListener('change', e => { $('camView').classList.toggle('grid', e.target.checked); if (lastImg) afterFrame(camCanvas.width, camCanvas.height); });
+addEventListener('resize', () => { if (lastImg) afterFrame(camCanvas.width, camCanvas.height); });
+function saveFrame(label) {
+  if (!lastImg) { banner('Ainda não chegou nenhum quadro. Ligue o envio de imagem ou use "Pedir um quadro".'); return; }
+  camCanvas.toBlob(b => download(b, `${label}.${fileStamp()}.png`), 'image/png');
+  log(`Quadro salvo como ${label}.`, 'sys');
+}
+
+/* ---------- comandos para a placa ---------- */
+const pendingAck = {};
+async function sendCmd(cmd) {
+  cmd = cmd.trim(); if (!cmd) return;
+  if (!demo && !writer) { log(`Não enviado (placa desconectada): ${cmd}`, 'warn'); return; }
+  log('> ' + cmd, 'tx');
+  const key = cmd.toUpperCase();
+  clearTimeout(pendingAck[key]);
+  pendingAck[key] = setTimeout(() => log(`A placa não confirmou "${cmd}". Confira se dbg_poll() roda no loop() do firmware.`, 'warn'), 2000);
+  try {
+    if (demo) demo.receive(cmd);
+    else await writer.write(enc.encode(cmd + '\n'));
+  } catch (e) { log('Falha ao enviar: ' + e.message, 'err'); }
+}
+function handleAck(a) {
+  const key = a.toUpperCase(); clearTimeout(pendingAck[key]); delete pendingAck[key];
+  if (key === 'PAUSE') setPaused(true);
+  if (key === 'RUN') setPaused(false);
+}
+let paused = false;
+function setPaused(p) { paused = p; $('btnPause').textContent = p ? 'Retomar inferência' : 'Pausar inferência'; }
+$('btnPause').addEventListener('click', () => sendCmd(paused ? 'RUN' : 'PAUSE'));
+$('camToggle').addEventListener('change', e => sendCmd(e.target.checked ? 'CAM 1' : 'CAM 0'));
+$('logToggle').addEventListener('change', e => sendCmd(e.target.checked ? 'LOG 1' : 'LOG 0'));
+$('btnSnap').addEventListener('click', () => sendCmd('SNAP'));
+$('btnSend').addEventListener('click', () => { sendCmd($('cmd').value); $('cmd').value = ''; });
+$('cmd').addEventListener('keydown', e => { if (e.key === 'Enter') { sendCmd($('cmd').value); $('cmd').value = ''; } });
+document.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => sendCmd(b.dataset.cmd)));
+function syncDevice() {
+  sendCmd('PING');
+  sendCmd($('camToggle').checked ? 'CAM 1' : 'CAM 0');
+  sendCmd($('logToggle').checked ? 'LOG 1' : 'LOG 0');
+}
+
+/* ---------- Web Serial ---------- */
+let port = null, reader = null, writer = null, readDone = null, closing = false, demo = null;
+function setStatus(s, text) { $('status').dataset.s = s; $('statusText').textContent = text; }
+async function connect() {
+  if (!('serial' in navigator)) { banner('Este navegador não tem Web Serial. Abra o arquivo no Chrome ou no Edge, no computador. O modo demonstração funciona em qualquer navegador.'); return; }
+  if (demo) stopDemo();
+  try { port = await navigator.serial.requestPort(); } catch { return; }
+  try { await port.open({ baudRate: +$('baud').value, bufferSize: 1 << 16 }); }
+  catch (e) {
+    banner(`Não foi possível abrir a porta (${e.message}). Feche o monitor serial da Arduino IDE ou outro programa que esteja usando a porta e tente de novo.`);
+    port = null; return;
+  }
+  parser.reset(); closing = false;
+  writer = port.writable.getWriter();
+  setStatus('on', `Conectado a ${(+$('baud').value).toLocaleString('pt-BR')} bps`);
+  $('btnConnect').textContent = 'Desconectar';
+  $('hudSub').textContent = 'Esperando a primeira leitura';
+  log('Porta aberta.', 'sys');
+  readDone = readLoop();
+  // a placa costuma reiniciar ao abrir a porta; espera o boot antes de sincronizar
+  setTimeout(() => { if (port) syncDevice(); }, 1500);
+}
+async function readLoop() {
+  while (port && port.readable && !closing) {
+    reader = port.readable.getReader();
+    try {
+      for (;;) { const { value, done } = await reader.read(); if (done) break; if (value && value.length) parser.push(value); }
+    } catch (e) { if (!closing) log('Erro de leitura: ' + e.message, 'err'); }
+    finally { try { reader.releaseLock(); } catch {} reader = null; }
+  }
+  if (!closing) cleanup('A placa foi desconectada.');
+}
+async function disconnect() {
+  closing = true;
+  try { if (reader) await reader.cancel(); } catch {}
+  try { await readDone; } catch {}
+  cleanup('Porta fechada.');
+}
+async function cleanup(msg) {
+  try { if (writer) writer.releaseLock(); } catch {}
+  writer = null;
+  try { if (port) await port.close(); } catch {}
+  port = null;
+  setStatus('off', 'Desconectado'); $('btnConnect').textContent = 'Conectar';
+  log(msg, 'sys');
+}
+$('btnConnect').addEventListener('click', () => port ? disconnect() : connect());
+if (!('serial' in navigator)) {
+  $('btnConnect').disabled = true;
+  banner('Este navegador não tem Web Serial, então a conexão com a placa fica desativada. Abra o arquivo no Chrome ou no Edge, no computador. O modo demonstração funciona aqui.');
+}
+
+/* ---------- modo demonstração (simula a placa e passa pelo mesmo leitor) ---------- */
+class DemoDevice {
+  constructor(push) {
+    this.push = push; this.cam = $('camToggle').checked; this.log = true; this.paused = false; this.snap = false;
+    this.seg = { cls: 'vazio', dur: 1200, t0: performance.now() };
+    this.cv = document.createElement('canvas'); this.cv.width = this.cv.height = 96; this.cx = this.cv.getContext('2d', { willReadFrequently: true });
+    this.timer = 0;
+  }
+  start() { this.hello(); this.loop(); }
+  stop() { clearTimeout(this.timer); }
+  out(s) { this.push(enc.encode(s)); }
+  hello() { this.out(`#HELLO {"proj":"caixas-demo","w":96,"h":96,"labels":["aberta","amassada","fechada","vazio"],"cam":${this.cam}}\n`); }
+  receive(cmd) {
+    const c = cmd.trim().toUpperCase();
+    const ok = () => setTimeout(() => this.out(`#ACK ${c}\n`), 25);
+    if (c === 'CAM 1') { this.cam = true; ok(); }
+    else if (c === 'CAM 0') { this.cam = false; ok(); }
+    else if (c === 'LOG 1') { this.log = true; ok(); }
+    else if (c === 'LOG 0') { this.log = false; ok(); }
+    else if (c === 'SNAP') { this.snap = true; ok(); }
+    else if (c === 'PAUSE') { this.paused = true; ok(); }
+    else if (c === 'RUN') { this.paused = false; ok(); }
+    else if (c === 'PING') { ok(); this.hello(); }
+    else setTimeout(() => this.out(`#ERR comando desconhecido: ${c}\n`), 25);
+  }
+  nextSeg() {
+    if (this.seg.cls !== 'vazio') this.seg = { cls: 'vazio', dur: 1400 + Math.random() * 1200 };
+    else { const r = Math.random(); this.seg = { cls: r < 0.45 ? 'fechada' : r < 0.73 ? 'aberta' : 'amassada', dur: 2600 + Math.random() * 1800 }; }
+    this.seg.t0 = performance.now(); this.seg.dx = (Math.random() - 0.5) * 10; this.seg.rot = (Math.random() - 0.5) * 0.3;
+  }
+  probs() {
+    const s = this.seg, age = performance.now() - s.t0, p = { aberta: 0, amassada: 0, fechada: 0, vazio: 0 };
+    let main = 0.7 + Math.random() * 0.27;
+    if (s.cls === 'amassada' && Math.random() < 0.3) main = 0.45 + Math.random() * 0.2; // às vezes confunde com aberta
+    p[s.cls] = main;
+    const others = Object.keys(p).filter(k => k !== s.cls);
+    let rest = 1 - main;
+    if (s.cls === 'amassada') { const a = rest * (0.5 + Math.random() * 0.4); p.aberta = a; rest -= a; }
+    others.forEach((k, i) => { if (p[k]) return; const v = i === others.length - 1 ? rest : rest * Math.random(); p[k] += v; rest -= v; });
+    if (age < 350 && s.cls !== 'vazio') { for (const k in p) p[k] *= 0.5; p.vazio += 0.5; } // caixa entrando no quadro
+    const sum = Object.values(p).reduce((a, b) => a + b, 0);
+    for (const k in p) p[k] = +(p[k] / sum).toFixed(4);
+    return p;
+  }
+  frame() {
+    const g = this.cx, t = performance.now() / 1000, s = this.seg;
+    g.fillStyle = '#4a4f57'; g.fillRect(0, 0, 96, 96);
+    g.fillStyle = '#3d4148'; for (let x = ((t * 30) % 14) - 14; x < 96; x += 14) g.fillRect(x, 0, 5, 96);
+    g.fillStyle = '#9aa3ad'; g.fillRect(0, 4, 96, 3); g.fillRect(0, 89, 96, 3);
+    if (s.cls !== 'vazio') {
+      const age = (performance.now() - s.t0) / 1000;
+      const cx = Math.min(48 + s.dx, -30 + age * 260) , cy = 48;
+      g.save(); g.translate(cx, cy); g.rotate(s.rot);
+      if (s.cls === 'fechada') {
+        g.fillStyle = '#b98653'; g.fillRect(-27, -22, 54, 44);
+        g.fillStyle = '#8c6239'; g.fillRect(-27, -1, 54, 2);
+        g.fillStyle = '#dcc595'; g.fillRect(-27, -4, 54, 8);
+      } else if (s.cls === 'aberta') {
+        g.fillStyle = '#c99a63';
+        g.fillRect(-27, -38, 54, 16); g.fillRect(-27, 22, 54, 16); g.fillRect(-42, -22, 15, 44); g.fillRect(27, -22, 15, 44);
+        g.fillStyle = '#b98653'; g.fillRect(-27, -22, 54, 44);
+        g.fillStyle = '#5e4024'; g.fillRect(-23, -18, 46, 36);
+      } else {
+        g.fillStyle = '#b07c4b';
+        g.beginPath(); g.moveTo(-27, -22); g.lineTo(20, -24); g.lineTo(29, -8); g.lineTo(18, 4); g.lineTo(26, 21); g.lineTo(-24, 22); g.lineTo(-29, 2); g.closePath(); g.fill();
+        g.strokeStyle = '#6e4a28'; g.lineWidth = 2; g.beginPath(); g.moveTo(-10, -20); g.lineTo(6, 2); g.lineTo(-4, 18); g.moveTo(14, -18); g.lineTo(20, 4); g.stroke();
+      }
+      g.restore();
+    }
+    const d = g.getImageData(0, 0, 96, 96).data, out = new Uint8Array(96 * 96 * 3);
+    for (let i = 0, j = 0; i < d.length; i += 4, j += 3) {
+      const n = (Math.random() - 0.5) * 14;
+      out[j] = Math.max(0, Math.min(255, d[i + 2] + n)); out[j + 1] = Math.max(0, Math.min(255, d[i + 1] + n)); out[j + 2] = Math.max(0, Math.min(255, d[i] + n)); // BGR, como o exemplo do Edge Impulse
+    }
+    return out;
+  }
+  loop() {
+    if (performance.now() - this.seg.t0 > this.seg.dur) this.nextSeg();
+    if (!this.paused) {
+      const p = this.probs(), dsp = 6 + (Math.random() * 3 | 0), cls = 118 + (Math.random() * 22 | 0);
+      this.out(`#INF ${JSON.stringify({ p, dsp, cls, heap: 3800000 + (Math.random() * 40000 | 0), temp: +(41 + Math.random() * 2).toFixed(1) })}\n`);
+      if (this.log) {
+        const top = Object.entries(p).sort((a, b) => b[1] - a[1])[0];
+        this.out(`Predictions (DSP: ${dsp} ms., Classification: ${cls} ms.): ${top[0]} ${top[1].toFixed(3)}\n`);
+      }
+      if (this.cam || this.snap) {
+        this.snap = false;
+        const img = this.frame();
+        this.out(`#IMG 96 96 bgr888 ${img.length}\n`);
+        for (let i = 0; i < img.length; i += 4096) this.push(img.subarray(i, i + 4096)); // chega em pedaços, como na serial
+        this.out('\n');
+      }
+    }
+    // com a câmera ligada cada leitura demora mais, igual à placa real
+    this.timer = setTimeout(() => this.loop(), this.paused ? 200 : (this.cam ? 420 : 180) + Math.random() * 40);
+  }
+}
+function startDemo() {
+  if (port) disconnect();
+  parser.reset();
+  demo = new DemoDevice(b => parser.push(b));
+  demo.start();
+  setStatus('demo', 'Demonstração');
+  $('btnDemo').textContent = 'Sair da demonstração';
+  log('Modo demonstração iniciado. Os dados são simulados.', 'sys');
+}
+function stopDemo() {
+  demo.stop(); demo = null;
+  setStatus('off', 'Desconectado'); $('btnDemo').textContent = 'Modo demonstração';
+  log('Modo demonstração encerrado.', 'sys');
+}
+$('btnDemo').addEventListener('click', () => demo ? stopDemo() : startDemo());
+
+/* ---------- cena 3D ---------- */
+const scene = (() => {
+  const R = createRenderer(160, 120, { cy: 0.6 });
+  R.cam.dist = 4.5;
+  const ctx = $('scene').getContext('2d');
+  const img = new ImageData(new Uint8ClampedArray(R.buf.buffer), 160, 120);
+  let geo = 'none', sat = 1, lift = 0, vy = 0, t = 0, last = performance.now();
+  function set(k) {
+    if (k === 'incerto') { sat = 0.2; if (geo === 'none') geo = 'vazio'; return; }
+    sat = 1;
+    if (k !== geo) {
+      const wasEmpty = geo === 'vazio' || geo === 'none';
+      geo = k;
+      if (k !== 'vazio' && !reduceMotion) { lift = wasEmpty ? 1.6 : 0.5; vy = 0; }
+    }
+  }
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (!reduceMotion) t += dt;
+    if (lift > 0 || vy !== 0) {
+      vy -= 14 * dt; lift += vy * dt;
+      if (lift <= 0) { lift = 0; vy = Math.abs(vy) > 1.2 ? -vy * 0.32 : 0; }
+    }
+    R.cam.yaw = 0.55 + (reduceMotion ? 0 : 0.42 * Math.sin(t * 0.45));
+    BOX.draw(R, geo, t, { lift, sat, beltT: paused ? 0 : t });
+    ctx.putImageData(img, 0, 0);
+    // LED de recepção
+    $('ledRx').classList.toggle('on', now - lastRx < 150);
+    flushLog();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  return { set };
+})();
+
+setInterval(() => {
+  updateCamMeta();
+  const idle = S.lastInfT && performance.now() - S.lastInfT > 3000;
+  if (idle) S.rate = 0;
+  $('hudRate').textContent = `${fmt(S.rate)} leituras/s`;
+}, 250);
+log('Pronto. Conecte a placa ou use o modo demonstração.', 'sys');
+</script>
+</body>
+</html>

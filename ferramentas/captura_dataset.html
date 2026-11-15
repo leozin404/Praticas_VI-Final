@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Captura do dataset de caixas</title>
+<style>
+:root{
+  --bg:#e9ecef; --panel:#ffffff; --ink:#1d2329; --muted:#5d6872; --line:#c9d0d6;
+  --kraft:#b98a4e; --kraft-ink:#4a3214;
+  --c1:#2f7d4f; --c2:#2c5f99; --c3:#b4552d; --c4:#6b6f75;
+  --err:#b42318; --ok:#2f7d4f;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#15191d; --panel:#1f252b; --ink:#e7ebee; --muted:#9aa5ae; --line:#36404a;
+    --kraft:#c89a5d; --kraft-ink:#1b1206;
+    --c1:#4fae78; --c2:#5b93d6; --c3:#de7d52; --c4:#9aa0a7;
+    --err:#f0786d; --ok:#4fae78;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:20px}
+h1{font-size:22px;margin:0 0 4px;font-weight:650}
+.sub{color:var(--muted);margin:0 0 18px}
+.grid{display:grid;grid-template-columns:320px 1fr;gap:18px}
+@media (max-width:800px){.grid{grid-template-columns:1fr}}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+h2{font-size:15px;margin:0 0 10px;font-weight:650}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 3px}
+input,select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;
+  background:var(--bg);color:var(--ink);font:inherit}
+button{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--line);
+  background:var(--bg);color:var(--ink);padding:8px 12px}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--kraft);outline-offset:2px}
+button:disabled{opacity:.45;cursor:not-allowed}
+.primary{background:var(--kraft);color:var(--kraft-ink);border-color:var(--kraft);font-weight:600}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.row button{flex:1}
+.status{margin-top:10px;font-size:13px}
+.status b.ok{color:var(--ok)} .status b.err{color:var(--err)}
+.classes{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:560px){.classes{grid-template-columns:repeat(2,1fr)}}
+.cls{padding:12px 8px;border:2px solid var(--cc);background:transparent;text-align:center}
+.cls .k{display:inline-block;min-width:22px;border-radius:4px;background:var(--cc);color:#fff;font-weight:700;font-size:12px;padding:0 5px}
+.cls .n{display:block;font-size:26px;font-weight:700;color:var(--cc);line-height:1.2;margin-top:4px}
+.cls .t{display:block;font-weight:600}
+.cls[aria-pressed="true"]{background:var(--cc);color:#fff}
+.cls[aria-pressed="true"] .n{color:#fff}
+.cls[aria-pressed="true"] .k{background:#fff;color:var(--cc)}
+.shoot{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin:14px 0}
+@media (max-width:560px){.shoot{grid-template-columns:1fr}}
+.shoot .big{font-size:17px;padding:12px}
+.auto{display:flex;gap:6px}
+.auto input{width:64px;flex:none}
+.auto button{flex:1}
+.previews{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+.preview{aspect-ratio:4/3;background:var(--bg);border:1px dashed var(--line);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--muted);text-align:center;padding:10px;font-size:14px}
+.preview.sq{aspect-ratio:1/1}
+.preview img{max-width:100%;max-height:100%;display:block;image-rendering:pixelated}
+.cap{font-size:13px;color:var(--muted);margin-top:8px;min-height:20px}
+.cap.err{color:var(--err)}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;height:170px;
+  overflow:auto;font:12px/1.4 Consolas,"Courier New",monospace;margin:0;white-space:pre-wrap;word-break:break-all}
+.warn{border-color:var(--err);color:var(--err);margin-bottom:14px}
+.hint{font-size:13px;color:var(--muted);margin-top:8px}
+kbd{font:12px Consolas,monospace;border:1px solid var(--line);border-radius:3px;padding:0 4px;background:var(--bg)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Captura do dataset de caixas</h1>
+  <p class="sub">Mesma coisa que o capturar_serial.py, rodando no Chrome ou Edge, sem instalar nada.</p>
+
+  <section id="noSerial" class="warn" hidden>
+    Este navegador não tem Web Serial. Abra este arquivo no Google Chrome ou no Microsoft Edge.
+  </section>
+
+  <div class="grid">
+    <div>
+      <section>
+        <h2>Conexão</h2>
+        <label for="baud">Baud rate (igual ao #define BAUD do firmware)</label>
+        <select id="baud">
+          <option selected>115200</option><option>230400</option><option>460800</option>
+          <option>921600</option><option>2000000</option>
+        </select>
+        <div class="row">
+          <button id="btnConnect" class="primary">Conectar ao ESP</button>
+          <button id="btnPing" disabled>Testar (ping)</button>
+        </div>
+        <div class="status" id="connStatus">Desconectado.</div>
+      </section>
+
+      <section style="margin-top:18px">
+        <h2>Onde salvar</h2>
+        <button id="btnFolder" style="width:100%">Escolher pasta do dataset</button>
+        <div class="status" id="folderStatus">Escolha uma pasta antes de capturar.</div>
+        <p class="hint">Dentro dela são criadas <b>edge_impulse/</b> (96x96 em cinza, é essa que vai pro Edge Impulse) e <b>originais/</b> (320x240 colorida, backup), cada uma com uma subpasta por classe. Os nomes seguem o padrão “aberta. (1).jpg”, continuando a numeração que já existir.</p>
+      </section>
+    </div>
+
+    <div>
+      <section>
+        <h2>Capturar</h2>
+        <div class="classes" id="classes"></div>
+        <div class="shoot">
+          <button id="btnShot" class="primary big" disabled>Tirar foto <kbd>Enter</kbd></button>
+          <div class="auto">
+            <input id="autoN" type="number" min="1" max="500" value="20" aria-label="Quantidade de fotos">
+            <button id="btnAuto" disabled>Seguidas</button>
+          </div>
+          <button id="btnView" disabled>Ver sem salvar <kbd>V</kbd></button>
+        </div>
+        <div class="previews">
+          <div class="preview" id="prevOrig">Foto original</div>
+          <div class="preview sq" id="prevEI">96x96 cinza</div>
+        </div>
+        <div class="cap" id="cap">Teclas <kbd>1</kbd> a <kbd>4</kbd> trocam a classe. <kbd>Esc</kbd> para as fotos seguidas.</div>
+      </section>
+      <section style="margin-top:18px">
+        <h2>Mensagens do ESP</h2>
+        <pre id="log"></pre>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+const BAUD_PADRAO = 115200;
+const CMD_FOTO = 'f\n';
+const CMD_PING = 'ping\n';
+const TAMANHO = 96;
+const TIMEOUT_FOTO = 8000;
+const INTERVALO_AUTO = 500;
+
+const CLASSES = [
+  {id:'aberta',  nome:'Aberta',   cor:'var(--c1)'},
+  {id:'fechada', nome:'Fechada',  cor:'var(--c2)'},
+  {id:'amassada',nome:'Amassada', cor:'var(--c3)'},
+  {id:'vazio',   nome:'Vazio',    cor:'var(--c4)'},
+];
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder(), dec = new TextDecoder();
+const START = enc.encode('START_IMAGE'), END = enc.encode('END_IMAGE');
+
+let port=null, reader=null, writer=null;
+let buf = new Uint8Array(0);
+let dirHandle=null, counts={}, classe=CLASSES[0].id;
+let busy=false, waiting=null, stopAuto=false;
+
+if(!('serial' in navigator)){ $('noSerial').hidden=false; $('btnConnect').disabled=true; }
+
+CLASSES.forEach((c,i)=>{
+  counts[c.id]=0;
+  const b=document.createElement('button');
+  b.className='cls'; b.id='cls_'+c.id; b.style.setProperty('--cc',c.cor);
+  b.innerHTML=`<span class="k">${i+1}</span> <span class="t">${c.nome}</span><span class="n" id="n_${c.id}">0</span>`;
+  b.onclick=()=>setClasse(c.id);
+  $('classes').appendChild(b);
+});
+setClasse(classe);
+
+function setClasse(id){
+  classe=id;
+  CLASSES.forEach(c=>$('cls_'+c.id).setAttribute('aria-pressed', c.id===id ? 'true':'false'));
+}
+function log(t){
+  const el=$('log'); el.textContent+=t+'\n';
+  if(el.textContent.length>20000) el.textContent=el.textContent.slice(-15000);
+  el.scrollTop=el.scrollHeight;
+}
+function msg(t,erro=false){ $('cap').textContent=t; $('cap').classList.toggle('err',erro); }
+function updateCounts(){ CLASSES.forEach(c=>$('n_'+c.id).textContent=counts[c.id]); }
+function refreshButtons(){
+  const on=!!port;
+  $('btnPing').disabled=!on||busy;
+  $('btnShot').disabled=!on||busy;
+  $('btnView').disabled=!on||busy;
+  $('btnAuto').disabled=!on||(busy&&!autoRunning);
+  $('btnAuto').textContent = autoRunning ? 'Parar' : 'Seguidas';
+}
+let autoRunning=false;
+
+function concat(a,b){ const r=new Uint8Array(a.length+b.length); r.set(a); r.set(b,a.length); return r; }
+function indexOf(h,n,from=0){
+  outer: for(let i=from;i<=h.length-n.length;i++){
+    for(let j=0;j<n.length;j++) if(h[i+j]!==n[j]) continue outer;
+    return i;
+  }
+  return -1;
+}
+
+// ---------------- serial ----------------
+$('btnConnect').onclick = async ()=>{
+  if(port){ await disconnect(); return; }
+  try{
+    port = await navigator.serial.requestPort();
+    await port.open({baudRate: parseInt($('baud').value)||BAUD_PADRAO, bufferSize: 1<<16});
+    try{ await port.setSignals({dataTerminalReady:false, requestToSend:false}); }catch(e){}
+    writer = port.writable.getWriter();
+    $('btnConnect').textContent='Desconectar';
+    $('connStatus').innerHTML='<b class="ok">Conectado.</b> Clique em Testar: deve aparecer READY no log.';
+    refreshButtons();
+    readLoop();
+  }catch(e){
+    port=null;
+    $('connStatus').innerHTML='<b class="err">Não conectou:</b> '+e.message+'. Feche o monitor serial do Arduino IDE e tente de novo.';
+  }
+};
+
+async function disconnect(){
+  stopAuto=true;
+  try{ if(reader) await reader.cancel(); }catch(e){}
+  try{ if(writer) writer.releaseLock(); }catch(e){}
+  try{ await port.close(); }catch(e){}
+  port=null; reader=null; writer=null; buf=new Uint8Array(0);
+  $('btnConnect').textContent='Conectar ao ESP';
+  $('connStatus').textContent='Desconectado.';
+  refreshButtons();
+}
+
+async function readLoop(){
+  while(port && port.readable){
+    reader = port.readable.getReader();
+    try{
+      while(true){
+        const {value,done} = await reader.read();
+        if(done) break;
+        if(value){ buf=concat(buf,value); processar(); }
+      }
+    }catch(e){ log('[erro de leitura] '+e.message); }
+    finally{ try{reader.releaseLock();}catch(e){} }
+    if(!port) break;
+  }
+}
+
+function processar(){
+  while(true){
+    const s = indexOf(buf, START);
+    if(s<0){
+      const nl = buf.lastIndexOf(10);
+      if(nl>=0){ texto(buf.slice(0,nl+1)); buf=buf.slice(nl+1); }
+      return;
+    }
+    if(s>0){ texto(buf.slice(0,s)); buf=buf.slice(s); continue; }
+    const e = indexOf(buf, END, START.length);
+    if(e<0) return;
+    const corpo = buf.slice(START.length, e);
+    buf = buf.slice(e+END.length);
+    imagemRecebida(corpo);
+  }
+}
+function texto(bytes){
+  dec.decode(bytes).split(/\r?\n/).filter(l=>l.trim()).forEach(l=>{
+    log(l);
+    if(l.startsWith('ERRO') && waiting){ const w=waiting; waiting=null; w.reject(new Error(l)); }
+  });
+}
+function imagemRecebida(corpo){
+  let a=-1,b=-1;
+  for(let i=0;i<corpo.length-1;i++) if(corpo[i]===0xFF&&corpo[i+1]===0xD8){a=i;break;}
+  for(let i=corpo.length-2;i>=0;i--) if(corpo[i]===0xFF&&corpo[i+1]===0xD9){b=i+2;break;}
+  if(!waiting) return;
+  const w=waiting; waiting=null;
+  if(a<0||b<=a) w.reject(new Error('resposta sem JPEG válido'));
+  else w.resolve(corpo.slice(a,b));
+}
+
+// igual ao pedir_foto() do Python
+function pedirFoto(){
+  return new Promise(async (resolve,reject)=>{
+    const t=setTimeout(()=>{ if(waiting){ waiting=null; reject(new Error('a foto não chegou a tempo')); } }, TIMEOUT_FOTO);
+    waiting={
+      resolve:v=>{clearTimeout(t);resolve(v);},
+      reject:e=>{clearTimeout(t);reject(e);}
+    };
+    buf=new Uint8Array(0);
+    await writer.write(enc.encode(CMD_FOTO));
+  });
+}
+
+// ---------------- imagem ----------------
+// igual ao preparar_para_ei(): quadrado central, 96x96, cinza
+async function prepararParaEI(jpeg){
+  const bmp = await createImageBitmap(new Blob([jpeg],{type:'image/jpeg'}));
+  const lado=Math.min(bmp.width,bmp.height);
+  const esq=Math.floor((bmp.width-lado)/2), topo=Math.floor((bmp.height-lado)/2);
+  const cv=document.createElement('canvas'); cv.width=TAMANHO; cv.height=TAMANHO;
+  const ctx=cv.getContext('2d');
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  ctx.drawImage(bmp, esq, topo, lado, lado, 0, 0, TAMANHO, TAMANHO);
+  const im=ctx.getImageData(0,0,TAMANHO,TAMANHO), d=im.data;
+  for(let i=0;i<d.length;i+=4){
+    const L=Math.round(d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114); // mesma fórmula do PIL "L"
+    d[i]=d[i+1]=d[i+2]=L;
+  }
+  ctx.putImageData(im,0,0);
+  return await new Promise(r=>cv.toBlob(r,'image/jpeg',0.95));
+}
+
+function mostrar(jpeg, eiBlob){
+  const o=$('prevOrig'); o.innerHTML='';
+  const i1=new Image(); i1.src=URL.createObjectURL(new Blob([jpeg],{type:'image/jpeg'})); i1.alt='Foto original'; o.appendChild(i1);
+  if(eiBlob){
+    const e=$('prevEI'); e.innerHTML='';
+    const i2=new Image(); i2.src=URL.createObjectURL(eiBlob); i2.alt='Versão 96x96 em cinza'; i2.style.width='100%'; e.appendChild(i2);
+  }
+}
+
+async function existe(dir,nome){
+  try{ await dir.getFileHandle(nome); return true; }catch(e){ return false; }
+}
+async function subpasta(...partes){
+  let d=dirHandle;
+  for(const p of partes) d=await d.getDirectoryHandle(p,{create:true});
+  return d;
+}
+async function gravar(dir,nome,blob){
+  const fh=await dir.getFileHandle(nome,{create:true});
+  const w=await fh.createWritable(); await w.write(blob); await w.close();
+}
+
+async function salvar(jpeg){
+  const eiBlob = await prepararParaEI(jpeg);
+  mostrar(jpeg, eiBlob);
+  const pEI=await subpasta('edge_impulse',classe), pOrig=await subpasta('originais',classe);
+  let n=1; while(await existe(pEI, `${classe}. (${n}).jpg`)) n++;
+  const nome=`${classe}. (${n}).jpg`;
+  await gravar(pOrig, nome, new Blob([jpeg],{type:'image/jpeg'}));
+  await gravar(pEI, nome, eiBlob);
+  counts[classe]++; updateCounts();
+  log(`salvo: ${classe}/${nome}`);
+  msg(`Salvo: ${classe}/${nome}`);
+}
+
+// ---------------- ações ----------------
+async function umaFoto(salvarFoto=true){
+  if(salvarFoto && !dirHandle){ msg('Escolha a pasta do dataset primeiro.',true); return false; }
+  try{
+    const jpeg=await pedirFoto();
+    if(salvarFoto) await salvar(jpeg);
+    else { mostrar(jpeg, await prepararParaEI(jpeg)); msg(`Só visualização (${jpeg.length} bytes), nada salvo.`); }
+    return true;
+  }catch(e){ msg('Falhou: '+e.message,true); log('[erro] '+e.message); return false; }
+}
+
+$('btnShot').onclick=async()=>{ if(busy) return; busy=true; refreshButtons(); await umaFoto(true); busy=false; refreshButtons(); };
+$('btnView').onclick=async()=>{ if(busy) return; busy=true; refreshButtons(); await umaFoto(false); busy=false; refreshButtons(); };
+$('btnAuto').onclick=async()=>{
+  if(autoRunning){ stopAuto=true; return; }
+  if(busy) return;
+  if(!dirHandle){ msg('Escolha a pasta do dataset primeiro.',true); return; }
+  const n=Math.max(1,parseInt($('autoN').value)||1);
+  busy=true; autoRunning=true; stopAuto=false; refreshButtons();
+  for(let i=0;i<n && !stopAuto && port;i++){
+    msg(`${i+1}/${n}...`);
+    await umaFoto(true);
+    await new Promise(r=>setTimeout(r,INTERVALO_AUTO));
+  }
+  if(stopAuto) msg('Fotos seguidas interrompidas.');
+  busy=false; autoRunning=false; refreshButtons();
+};
+$('btnPing').onclick=async()=>{ if(!writer) return; log('> ping'); await writer.write(enc.encode(CMD_PING)); };
+
+$('btnFolder').onclick=async()=>{
+  if(!window.showDirectoryPicker){ $('folderStatus').textContent='Este navegador não deixa escolher pasta. Use o Chrome ou o Edge atualizados.'; return; }
+  try{
+    dirHandle=await window.showDirectoryPicker({mode:'readwrite'});
+    for(const c of CLASSES){
+      counts[c.id]=0;
+      try{
+        const sub=await (await dirHandle.getDirectoryHandle('edge_impulse')).getDirectoryHandle(c.id);
+        for await (const [nome] of sub.entries()) if(/\.jpe?g$/i.test(nome)) counts[c.id]++;
+      }catch(e){}
+    }
+    updateCounts();
+    $('folderStatus').textContent='Salvando em: '+dirHandle.name;
+  }catch(e){}
+};
+
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  const n=parseInt(e.key);
+  if(n>=1&&n<=4){ e.preventDefault(); setClasse(CLASSES[n-1].id); return; }
+  if(e.key==='Enter'){ e.preventDefault(); if(!$('btnShot').disabled) $('btnShot').click(); }
+  if((e.key==='v'||e.key==='V')&&!$('btnView').disabled){ e.preventDefault(); $('btnView').click(); }
+  if(e.key==='Escape'&&autoRunning) stopAuto=true;
+});
+</script>
+</body>
+</html>
